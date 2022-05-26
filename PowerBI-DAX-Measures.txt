@@ -1,0 +1,102 @@
+####	find Weekday out of Date
+Weekday = FORMAT(CITIWEATHERINNER[OBSERVATION_TIME],"ddd") 
+
+Dauer_in_Stunde = 'VW_DAILY_SUMMARY'[DAUERMINUTEN] / 60
+
+####	indexing to first of jan 18
+Index 100 = 
+VAR Date_index = Date (2018,1,1)
+VAR base2 = LOOKUPVALUE(VW_DAILY_SUMMARY[Moving_Average_7_Days],VW_DAILY_SUMMARY[DATUM],Date_index)
+VAR valu = FIRSTNONBLANK(VW_DAILY_SUMMARY[Moving_Average_7_Days],VW_DAILY_SUMMARY[DATUM].[Date]=Date_index)
+RETURN
+    (valu / base2) * 100
+	
+####	calculate moving average
+Moving_Average_30_Days = 
+CALCULATE (
+    AVERAGEX ( 'VW_DAILY_SUMMARY', 'VW_DAILY_SUMMARY'[ANZAHLTRIPS] ),
+    DATESINPERIOD (
+        'VW_DAILY_SUMMARY'[DATUM],
+        LASTDATE ( 'VW_DAILY_SUMMARY'[DATUM] ),
+        -30,
+        DAY
+    )
+)
+
+####	 aggregaate hours per Date
+Durchschnittlich StundenStr pro DATUM = 
+AVERAGEX(
+	KEEPFILTERS(VALUES('VW_STATION_NAME'[DATUM])),
+	CALCULATE(SUM('VW_STATION_NAME'[Stundee]))
+)
+
+####	aggregate temperature per DAte
+
+Durchschnittlich Tempstr = 
+AVERAGEX(
+	KEEPFILTERS(VALUES('VW_STATION_NAME'[DATUM] )),
+	CALCULATE(AVERAGE('VW_STATION_NAME'[TEMPERATURDURCHSCHNITT]))
+)
+
+####	Age Group Categorizing
+
+AltersGruppe = SWITCH(
+     TRUE(),
+     'VW_STUNDEN_BASIS'[Age]=0, "Emtpy",
+     'VW_STUNDEN_BASIS'[Age]<=29, "18 - 29",
+     'VW_STUNDEN_BASIS'[Age]<=39, "30 - 39",
+     'VW_STUNDEN_BASIS'[Age]<=49, "40 - 49",
+     'VW_STUNDEN_BASIS'[Age]<=59, "50 - 59",
+     'VW_STUNDEN_BASIS'[Age]<=69, "60 - 69",
+     'VW_STUNDEN_BASIS'[Age]<=90, "70 - 90",
+     "Over 90"
+                )
+				
+####	Correlation
+
+Count of WETTER and ANZAHLTRIPS correlation for WETTER = 
+VAR __CORRELATION_TABLE = VALUES('VW_STUNDEN_BASIS'[WETTER])
+VAR __COUNT =
+	COUNTX(
+		KEEPFILTERS(__CORRELATION_TABLE),
+		CALCULATE(
+			COUNTA('VW_STUNDEN_BASIS'[WETTER])
+				* SUM('VW_STUNDEN_BASIS'[ANZAHLTRIPS])
+		)
+	)
+VAR __SUM_X =
+	SUMX(
+		KEEPFILTERS(__CORRELATION_TABLE),
+		CALCULATE(COUNTA('VW_STUNDEN_BASIS'[WETTER]))
+	)
+VAR __SUM_Y =
+	SUMX(
+		KEEPFILTERS(__CORRELATION_TABLE),
+		CALCULATE(SUM('VW_STUNDEN_BASIS'[ANZAHLTRIPS]))
+	)
+VAR __SUM_XY =
+	SUMX(
+		KEEPFILTERS(__CORRELATION_TABLE),
+		CALCULATE(
+			COUNTA('VW_STUNDEN_BASIS'[WETTER])
+				* SUM('VW_STUNDEN_BASIS'[ANZAHLTRIPS]) * 1.
+		)
+	)
+VAR __SUM_X2 =
+	SUMX(
+		KEEPFILTERS(__CORRELATION_TABLE),
+		CALCULATE(COUNTA('VW_STUNDEN_BASIS'[WETTER]) ^ 2)
+	)
+VAR __SUM_Y2 =
+	SUMX(
+		KEEPFILTERS(__CORRELATION_TABLE),
+		CALCULATE(SUM('VW_STUNDEN_BASIS'[ANZAHLTRIPS]) ^ 2)
+	)
+RETURN
+	DIVIDE(
+		__COUNT * __SUM_XY - __SUM_X * __SUM_Y * 1.,
+		SQRT(
+			(__COUNT * __SUM_X2 - __SUM_X ^ 2)
+				* (__COUNT * __SUM_Y2 - __SUM_Y ^ 2)
+		)
+	)
